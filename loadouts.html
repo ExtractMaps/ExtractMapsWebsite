@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Extract Maps | Beta V0.12</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root{
+      --bg:#1c1c1c; --panel:#0e0f13; --card:#14171d; --card2:#171a21;
+      --border:#22262d; --text:#f2f5f7; --muted:#9aa4b2;
+      --yellow:#facc15; --yellow-d:#6b5610; --nav-h:56px;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+
+    /* Layout */
+    .app{display:grid;grid-template-columns:340px minmax(0,1fr);height:100vh}
+    /* LEFT SIDEBAR */
+    .panel{position:relative;background:var(--panel);border-right:1px solid var(--border)}
+    .panel-body{height:100vh;padding:14px;overflow:auto;-ms-overflow-style:none;scrollbar-width:none}
+    .panel-body::-webkit-scrollbar{display:none}
+    /* custom scrollbar track */
+    .panel-scrollbar{position:absolute;top:14px;bottom:14px;right:6px;width:8px;z-index:20;opacity:0;transition:opacity .2s}
+    .panel:hover .panel-scrollbar{opacity:1}
+    .panel-thumb{position:absolute;left:0;top:0;right:0;height:40px;background:#2b3139;border:1px solid #1f232a;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,.25);cursor:pointer}
+    .panel-scrollbar.active .panel-thumb{background:var(--yellow);border-color:var(--yellow-d)}
+
+    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px;margin-bottom:12px}
+    .card.tight{padding:10px}
+    .label{font-size:12px;color:var(--muted);margin-bottom:6px}
+
+    .search{display:flex;align-items:center;gap:10px;background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:10px 12px}
+    .search input{flex:1;background:transparent;border:0;outline:none;color:var(--text)}
+    .pin{width:22px;height:22px;border-radius:9999px;background:#2b250f;border:1px solid var(--yellow-d);display:grid;place-items:center;box-shadow:inset 0 0 0 2px #0006}
+    .pin-dot{width:10px;height:10px;border-radius:9999px;background:var(--yellow)}
+    .hamburger{display:none;align-items:center;justify-content:center;width:36px;height:36px;border-radius:10px;background:#161a20;border:1px solid var(--border);cursor:pointer}
+    .hamburger svg{width:18px;height:18px;color:#e7edf2}
+
+    .brand{background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:16px 14px;text-align:center}
+    .brand .badge{margin-top:10px;display:inline-flex;align-items:center;gap:8px;border-radius:10px;padding:6px 10px;background:#2b250f;border:1px solid var(--yellow-d);color:#ffe27a;font-weight:800;font-size:12px;text-transform:uppercase}
+    .social{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:10px}
+    .social a{display:inline-flex;align-items:center;gap:8px;background:#101317;border:1px solid #1f232a;border-radius:12px;padding:8px 10px;color:#e7edf2;text-decoration:none;font-weight:800;font-size:12px;letter-spacing:.3px}
+    .social a:hover{filter:brightness(1.07)}
+    .social .ico{display:inline-grid;place-items:center;width:16px;height:16px}
+    .ico-yellow{color:var(--yellow)}
+
+    .select{position:relative}
+    .select select{appearance:none;width:100%;background:var(--card2);color:var(--text);border:1px solid var(--border);border-radius:12px;padding:12px 36px 12px 12px;font-size:14px;font-weight:700;letter-spacing:.5px}
+    .select .chev{position:absolute;right:10px;top:50%;transform:translateY(-50%);width:16px;height:16px;opacity:.8;color:#c9d2da}
+
+    /* MAIN AREA */
+    .main{position:relative;min-width:0;height:100vh;display:flex;flex-direction:column}
+    .top-nav{position:sticky;top:0;height:var(--nav-h);background:linear-gradient(to bottom,#12151b,#0f1217);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 12px;z-index:10}
+    .nav-left{display:flex;align-items:center;gap:8px}
+    .nav-item{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;border:1px solid #1f232a;background:#0f1217;color:#e7edf2;font-weight:800;font-size:13px;letter-spacing:.3px;text-decoration:none}
+    .nav-item .dot{width:8px;height:8px;border-radius:9999px;background:var(--yellow)}
+    .nav-item.active{background:#151922;border-color:#2a2f38}
+    .nav-right .signin{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;border:1px solid #3b2f0e;background:#2b250f;color:#ffe27a;font-weight:900;letter-spacing:.4px;text-decoration:none}
+
+    .wrap{flex:1;overflow:auto;padding:18px}
+    .hero{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;margin-bottom:12px}
+    .h1{font-weight:900;letter-spacing:.6px;font-size:28px;color:#d5f0ff}
+    .sub{color:#9bb8bf;font-size:13px}
+    .pill{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);background:#101317;border-radius:12px;font-weight:800;font-size:12px;color:#e7edf2}
+
+    .empty{background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:18px;color:#b9c7d2}
+
+    .updated{position:fixed;right:10px;bottom:8px;z-index:50;background:rgba(16,19,23,.96);border:1px solid var(--border);color:#b9c7d2;padding:6px 10px;border-radius:10px;font-size:12px}
+
+    @media (max-width:900px){
+      .app{grid-template-columns:1fr}
+      .top-nav{position:sticky}
+      .hamburger{display:inline-flex}
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- LEFT SIDEBAR -->
+  <aside class="panel">
+    <div class="panel-body" id="panelBody">
+      <div class="card search">
+        <div class="pin"><div class="pin-dot"></div></div>
+        <input id="search" placeholder="Search"/>
+        <button class="hamburger" id="btnMobileNav" title="Menu" aria-label="Menu">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 6h18v2H3V6Zm0 5h18v2H3v-2Zm0 5h18v2H3v-2Z"/></svg>
+        </button>
+        <svg viewBox="0 0 24 24" fill="currentColor" style="width:18px;height:18px;opacity:.85"><path d="M10 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16Zm0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12Zm8.293 12.293 3.707 3.707-1.414 1.414-3.707-3.707 1.414-1.414Z"/></svg>
+      </div>
+
+      <div class="brand card">
+        <img src="./logo.png" alt="Extract Maps" style="display:block;width:100%;height:auto;max-height:80px;object-fit:contain;margin:4px auto 8px;">
+        <div class="badge">BETA V0.12</div>
+        <div class="social">
+          <a href="https://x.com/" target="_blank" rel="noopener"><span class="ico">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h3l5 7 6-7h2l-6.5 7.7L20 20h-3l-5.3-7.3L6 20H4l6.8-8L4 4Z"/></svg></span> X</a>
+          <a href="https://discord.com/invite/" target="_blank" rel="noopener"><span class="ico">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 4a4 4 0 0 0-3.6-2.2h-.1A16.6 16.6 0 0 0 12 3a16.6 16.6 0 0 0-4.3-1.2h-.1A4 4 0 0 0 4 4a22 22 0 0 0-2 9.3A4 4 0 0 0 6 20s.5-.6 1-1c-2.3-.7-3.2-2.2-3.2-2.2.3.2.8.4 1.4.7 2.5 1.1 5.7 1.2 5.7 1.2s.2 0 .2 0"/></svg></span> Discord</a>
+          <a href="https://buymeacoffee.com/" target="_blank" rel="noopener"><span class="ico ico-yellow">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-7-4.35-7-9.5A4.5 4.5 0 0 1 9.5 7c1.4 0 2.5.65 3.5 1.77C14 7.65 15.1 7 16.5 7A4.5 4.5 0 0 1 19 11.5C19 16.65 12 21 12 21Z"/></svg></span> Donate</a>
+        </div>
+      </div>
+
+      <!-- Only Gun Type selection -->
+      <div class="card tight">
+        <div class="label">Gun Type</div>
+        <div class="select">
+          <select id="gunSelect">
+            <option value="all">All</option>
+            <option value="assault">Assault</option>
+            <option value="smg">SMG</option>
+            <option value="sniper">Sniper</option>
+            <option value="lmg">LMG</option>
+            <option value="marksman">Marksman</option>
+          </select>
+          <svg class="chev" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5H7z"/></svg>
+        </div>
+      </div>
+
+      <!-- Nothing else for now -->
+    </div>
+    <div class="panel-scrollbar"><div class="panel-thumb"></div></div>
+  </aside>
+
+  <!-- MAIN COLUMN -->
+  <main class="main">
+    <nav class="top-nav" aria-label="Primary">
+      <div class="nav-left">
+        <a class="nav-item" href="home.html"><span class="dot"></span> Home</a>
+        <a class="nav-item" href="index v0.06.html"><span class="dot"></span> Maps</a>
+        <a class="nav-item" href="loadouts.html"><span class="dot"></span> Loadouts</a>
+        <a class="nav-item" href="tools.html"><span class="dot"></span> Tools</a>
+      </div>
+      <div class="nav-right"><a class="signin" href="#">Sign in</a></div>
+    </nav>
+
+    <div class="wrap">
+      <header class="hero">
+        <div>
+          <div class="h1">Maps</div>
+          <div class="sub">Map module is parked. We are staging the framework first. Use the Gun Type selector to prime future content.</div>
+        </div>
+        <div id="gunPill" class="pill">Gun type: ALL</div>
+      </header>
+
+      <section class="empty">
+        This area will host the interactive map and overlays when you are ready. For now, we keep it minimal to accelerate Loadouts and global UI.
+      </section>
+    </div>
+  </main>
+</div>
+
+<div class="updated" id="updatedBadge">LAST UPDATED: AUGUST 23, 2025 09:00</div>
+
+<script>
+  // Active tab highlight
+  (function(){
+    const path = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
+    document.querySelectorAll('.top-nav .nav-item').forEach(a=>{
+      const href = a.getAttribute('href').toLowerCase();
+      if (path === href || (path === '' && href === 'index.html')) a.classList.add('active');
+    });
+  })();
+
+  // Gun type select with persistence
+  (function(){
+    const sel = document.getElementById('gunSelect');
+    const pill = document.getElementById('gunPill');
+    const KEY = 'em.gunType';
+    const saved = (localStorage.getItem(KEY) || 'all').toLowerCase();
+    sel.value = saved;
+    pill.textContent = 'Gun type: ' + saved.toUpperCase();
+    sel.addEventListener('change', e=>{
+      const v = (e.target.value || 'all').toLowerCase();
+      localStorage.setItem(KEY, v);
+      pill.textContent = 'Gun type: ' + v.toUpperCase();
+      const badge=document.getElementById('updatedBadge');
+      if(badge){ badge.textContent = 'Gun type set to ' + v.toUpperCase(); }
+    });
+  })();
+
+  // Custom sidebar scrollbar logic
+  (function(){
+    const body = document.getElementById('panelBody');
+    const bar  = document.querySelector('.panel-scrollbar');
+    const thumb= document.querySelector('.panel-thumb');
+    function refresh(){
+      const sh=body.scrollHeight, ch=body.clientHeight, trackH=bar.clientHeight;
+      if(sh<=ch){ bar.style.display='none'; return; }
+      bar.style.display='block';
+      const ratio=ch/sh, thumbH=Math.max(30,Math.floor(trackH*ratio));
+      const maxScroll=sh-ch, maxTrack=trackH-thumbH;
+      thumb.style.height=thumbH+'px';
+      const top=(body.scrollTop/maxScroll)*maxTrack;
+      thumb.style.transform=`translateY(${isFinite(top)?top:0}px)`;
+    }
+    body.addEventListener('scroll',refresh);
+    window.addEventListener('resize',refresh);
+    new ResizeObserver(refresh).observe(body);
+
+    let dragging=false,startY=0,startScroll=0;
+    thumb.addEventListener('mousedown',e=>{ dragging=true; startY=e.clientY; startScroll=body.scrollTop; bar.classList.add('active'); e.preventDefault(); });
+    window.addEventListener('mousemove',e=>{ if(!dragging) return; const rect=bar.getBoundingClientRect(); const th=thumb.offsetHeight; const maxTrack=rect.height-th; const maxScroll=body.scrollHeight-body.clientHeight; const dy=e.clientY-startY; body.scrollTop=startScroll+(dy/maxTrack)*maxScroll; });
+    window.addEventListener('mouseup',()=>{ dragging=false; bar.classList.remove('active'); });
+    bar.addEventListener('mousedown',e=>{ if(e.target===thumb) return; const rect=bar.getBoundingClientRect(); const y=e.clientY-rect.top; const pct=y/rect.height; body.scrollTop=pct*(body.scrollHeight-body.clientHeight); });
+
+    refresh();
+  })();
+</script>
+</body>
+</html>

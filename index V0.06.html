@@ -1,0 +1,620 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Extract Maps | Beta V0.09</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    :root{
+      --bg:#1c1c1c; --panel:#0e0f13; --card:#14171d; --card2:#171a21;
+      --border:#22262d; --text:#f2f5f7; --muted:#9aa4b2;
+      --yellow:#facc15; --yellow-d:#6b5610;
+      --nav-h:56px; --rpanel-w:360px;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+    .app{display:grid;grid-template-columns:340px minmax(0,1fr) 0px;height:100vh;transition:grid-template-columns .2s ease}
+    .app.has-info{grid-template-columns:340px minmax(0,1fr) var(--rpanel-w)}
+
+    /* left sidebar */
+    .panel{position:relative;width:340px;height:100vh;background:var(--panel);border-right:1px solid var(--border)}
+    .panel-body{position:relative;height:100%;padding:14px;overflow:auto;-ms-overflow-style:none;scrollbar-width:none}
+    .panel-body::-webkit-scrollbar{display:none}
+    .panel-scrollbar{position:absolute;top:14px;bottom:14px;right:6px;width:8px;z-index:20;opacity:0;transition:opacity .2s}
+    .panel:hover .panel-scrollbar{opacity:1}
+    .panel-thumb{position:absolute;left:0;top:0;right:0;height:40px;background:#2b3139;border:1px solid #1f232a;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,.25);cursor:pointer}
+    .panel-scrollbar.active .panel-thumb{background:var(--yellow);border-color:var(--yellow-d)}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px;margin-bottom:12px}
+    .card.tight{padding:10px}
+    .label{font-size:12px;color:var(--muted);margin-bottom:6px}
+
+    .search{display:flex;align-items:center;gap:10px;background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:10px 12px}
+    .search input{flex:1;background:transparent;border:0;outline:none;color:var(--text)}
+    .pin{width:22px;height:22px;border-radius:9999px;background:#2b250f;border:1px solid var(--yellow-d);display:grid;place-items:center;box-shadow:inset 0 0 0 2px #0006}
+    .pin-dot{width:10px;height:10px;border-radius:9999px;background:var(--yellow)}
+    .hamburger{display:none;align-items:center;justify-content:center;width:36px;height:36px;border-radius:10px;background:#161a20;border:1px solid #1f232a;cursor:pointer}
+    .hamburger svg{width:18px;height:18px;color:#e7edf2}
+
+    .brand{background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:16px 14px;text-align:center}
+    .brand .badge{margin-top:10px;display:inline-flex;align-items:center;gap:8px;border-radius:10px;padding:6px 10px;background:#2b250f;border:1px solid var(--yellow-d);color:#ffe27a;font-weight:800;font-size:12px;text-transform:uppercase}
+
+    .social{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:10px}
+    .social a{display:inline-flex;align-items:center;gap:8px;background:#101317;border:1px solid #1f232a;border-radius:12px;padding:8px 10px;color:#e7edf2;text-decoration:none;font-weight:800;font-size:12px;letter-spacing:.3px}
+    .social a:hover{filter:brightness(1.07)}
+    .social .ico{display:inline-grid;place-items:center;width:16px;height:16px}
+    .ico-yellow{color:var(--yellow)}
+
+    .select{position:relative}
+    .select select{appearance:none;width:100%;background:var(--card2);color:var(--text);border:1px solid var(--border);border-radius:12px;padding:12px 36px 12px 12px;font-size:14px;font-weight:700;letter-spacing:.5px}
+    .select .chev{position:absolute;right:10px;top:50%;transform:translateY(-50%);width:16px;height:16px;opacity:.8;color:#c9d2da}
+
+    .pill-row{display:flex;gap:10px}
+    .pill{flex:1;text-align:center;background:#101317;border:1px solid #1f232a;color:#e7edf2;padding:10px 0;border-radius:12px;font-weight:800;letter-spacing:.5px;cursor:pointer}
+
+    .accordion{display:flex;flex-direction:column}
+    .accordion>.acc{margin-bottom:12px}
+    .acc{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:var(--card2)}
+    .acc-h{display:flex;align-items:center;justify-content:space-between;padding:14px;cursor:pointer}
+    .acc-title{font-weight:900;letter-spacing:.6px;color:#d5f0ff}
+    .chev{transition:transform .18s;color:#bcd0df}
+    .acc.open .chev{transform:rotate(90deg)}
+    .acc-b{padding:12px;border-top:1px solid var(--border);display:none}
+    .acc.open .acc-b{display:block}
+
+    .item{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:8px}
+    .name{font-size:14px;color:#eef2f7}
+    .status-dot{width:18px;height:18px;display:grid;place-items:center}
+    .ic{width:14px;height:14px;border-radius:9999px;border:2px solid #0008}
+    .ic.yellow{background:var(--yellow)}
+    .ic.grey{background:#505a65}
+    .item .ic{opacity:.55}
+    .item.on .ic{opacity:1}
+
+    .switch{display:flex;align-items:center;justify-content:flex-start;width:46px;height:26px;padding:3px;border-radius:9999px;background:#0f1217;border:1px solid #1f232a;cursor:pointer}
+    .switch .knob{width:20px;height:20px;border-radius:9999px;background:#2c333b;transition:transform .18s,background .18s,box-shadow .18s}
+    .switch.on{justify-content:flex-end;background:#1f1a0a;border-color:#463a12}
+    .switch.on .knob{background:var(--yellow);box-shadow:0 0 6px rgba(250,204,21,.55)}
+
+    #stage{position:relative;height:100vh}
+    #map{width:100%;height:100%}
+    .leaflet-container{background:#101317}
+    .leaflet-control-attribution{display:none !important}
+
+    .top-nav{position:absolute;top:0;left:0;right:0;height:var(--nav-h);background:linear-gradient(to bottom,#12151b,#0f1217);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 12px;z-index:3900}
+    .nav-left{display:flex;align-items:center;gap:8px}
+    .nav-item{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;border:1px solid #1f232a;background:#0f1217;color:#e7edf2;font-weight:800;font-size:13px;letter-spacing:.3px;text-decoration:none}
+    .nav-item .dot{width:8px;height:8px;border-radius:9999px;background:var(--yellow)}
+    .nav-right .signin{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;border:1px solid #3b2f0e;background:#2b250f;color:#ffe27a;font-weight:900;letter-spacing:.4px;text-decoration:none}
+
+    .map-hud{position:absolute;top:calc(var(--nav-h) + 12px);right:12px;z-index:4000;display:flex;align-items:stretch;gap:10px}
+    .hud-label{background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:10px 14px;box-shadow:0 6px 18px rgba(0,0,0,.25)}
+    .hud-title{color:#baf7ff;font-weight:900;letter-spacing:.6px;font-size:18px}
+    .hud-sub{color:#9bb8bf;font-size:12px}
+    .hud-zoom{display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--border);border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.25)}
+    .hud-zoom button{width:40px;height:30px;border:0;background:var(--card2);color:#e9f1f6;font-size:18px;cursor:pointer}
+    .hud-zoom button+button{border-top:1px solid var(--border)}
+
+    .updated{position:fixed;right:10px;bottom:8px;z-index:5000;background:rgba(16,19,23,.96);border:1px solid var(--border);color:#b9c7d2;padding:6px 10px;border-radius:10px;font-size:12px}
+
+    .rpanel{height:100vh;background:var(--panel);border-left:1px solid var(--border);display:flex;flex-direction:column;min-width:0}
+    .r-head{display:flex;align-items:center;justify-content:space-between;padding:12px;border-bottom:1px solid var(--border);background:#0f1217}
+    .r-title{font-weight:900;letter-spacing:.6px}
+    .r-close{width:34px;height:34px;border-radius:10px;background:#161a20;border:1px solid var(--border);color:#e7edf2;display:grid;place-items:center;cursor:pointer}
+    .r-body{padding:12px;overflow:auto}
+    .r-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px;margin-bottom:12px}
+    .media-frame{width:100%;aspect-ratio:16/9;background:#0b0e12;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+    .media-frame img{width:100%;height:100%;object-fit:cover;display:block}
+    .media-frame iframe,.media-frame video{width:100%;height:100%;border:0;display:block}
+
+    @media (max-width:900px){
+      .app{grid-template-columns:1fr}
+      .top-nav{display:none}
+      .hamburger{display:inline-flex}
+      .map-hud{top:12px}
+    }
+  </style>
+</head>
+<body>
+<div class="app" id="appRoot">
+
+  <!-- LEFT SIDEBAR -->
+  <aside class="panel">
+    <div class="panel-body">
+      <div class="card search">
+        <div class="pin"><div class="pin-dot"></div></div>
+        <input id="search" placeholder="Search for Rare Items & Loot"/>
+        <button class="hamburger" id="btnMobileNav" title="Menu" aria-label="Menu">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 6h18v2H3V6Zm0 5h18v2H3v-2Zm0 5h18v2H3v-2Z"/></svg>
+        </button>
+        <svg viewBox="0 0 24 24" fill="currentColor" style="width:18px;height:18px;opacity:.85"><path d="M10 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16Zm0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12Zm8.293 12.293 3.707 3.707-1.414 1.414-3.707-3.707 1.414-1.414Z"/></svg>
+      </div>
+
+      <div class="brand card">
+        <img src="./logo.png" alt="Extract Maps" style="display:block;width:100%;height:auto;max-height:80px;object-fit:contain;margin:4px auto 8px;">
+        <div class="badge">BETA V0.09</div>
+        <div class="social">
+          <a href="https://x.com/" target="_blank" rel="noopener"><span class="ico">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h3l5 7 6-7h2l-6.5 7.7L20 20h-3l-5.3-7.3L6 20H4l6.8-8L4 4Z"/></svg></span> X</a>
+          <a href="https://discord.com/invite/" target="_blank" rel="noopener"><span class="ico">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 4a4 4 0 0 0-3.6-2.2h-.1A16.6 16.6 0 0 0 12 3a16.6 16.6 0 0 0-4.3-1.2h-.1A4 4 0 0 0 4 4a22 22 0 0 0-2 9.3A4 4 0 0 0 6 20s.5-.6 1-1c-2.3-.7-3.2-2.2-3.2-2.2.3.2.8.4 1.4.7 2.5 1.1 5.7 1.2 5.7 1.2s3.2-.1 5.7-1.2c.6-.3 1.1-.5 1.4-.7 0 0-.9 1.5-3.2 2.2.5.4 1 1 1 1a4 4 0 0 0 4-6.7A22 22 0 0 0 20 4Z"/></svg></span> Discord</a>
+          <a href="https://buymeacoffee.com/" target="_blank" rel="noopener"><span class="ico ico-yellow">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-7-4.35-7-9.5A4.5 4.5 0 0 1 9.5 7c1.4 0 2.5.65 3.5 1.77C14 7.65 15.1 7 16.5 7A4.5 4.5 0 0 1 19 11.5C19 16.65 12 21 12 21Z"/></svg></span> Donate</a>
+        </div>
+      </div>
+
+      <div class="card tight">
+        <div class="label">Map</div>
+        <div class="select">
+          <select id="mapSelect"></select>
+          <svg class="chev" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5H7z"/></svg>
+        </div>
+      </div>
+
+      <div class="card tight">
+        <div class="pill-row">
+          <button id="btnAll" class="pill">ALL</button>
+          <button id="btnNone" class="pill">NONE</button>
+        </div>
+      </div>
+
+      <div id="accHost" class="accordion"></div>
+
+      <div id="settingsAcc" class="acc open">
+        <div class="acc-h"><div class="acc-title">MAP SETTINGS</div><div class="chev">›</div></div>
+        <div class="acc-b">
+          <div class="card" style="margin:0 0 8px 0">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+              <div style="font-weight:800;letter-spacing:.3px">Marker Opacity</div>
+              <div id="opacityVal" style="color:#ffd95e;font-size:12px">100%</div>
+            </div>
+            <input id="iconOpacity" type="range" min="0" max="1" step="0.05" value="1">
+          </div>
+
+          <!-- Global toggle for rings (default ON) -->
+          <div id="rowRings" class="item" style="cursor:pointer">
+            <div class="status-dot"><span class="ic grey"></span></div>
+            <div class="name">Show Range Circles</div>
+            <div id="ringsSwitch" class="switch"><div class="knob"></div></div>
+          </div>
+
+          <div id="rowDebug" class="item" style="cursor:pointer;margin-top:8px">
+            <div class="status-dot"><span class="ic grey"></span></div>
+            <div class="name">Coordinate Seeker</div>
+            <div id="debugSwitch" class="switch"><div class="knob"></div></div>
+          </div>
+          <div id="debugReadout" style="margin-top:6px;color:#ffd95e;font-size:12px;display:none">Click the map for X Y</div>
+        </div>
+      </div>
+
+    </div>
+    <div class="panel-scrollbar"><div class="panel-thumb"></div></div>
+  </aside>
+
+  <!-- MAP COLUMN -->
+  <main id="stage">
+    <nav class="top-nav" aria-label="Primary">
+      <div class="nav-left">
+        <a class="nav-item" href="#"><span class="dot"></span> Home</a>
+        <a class="nav-item" href="#"><span class="dot"></span> Maps</a>
+        <a class="nav-item" href="loadouts.html"><span class="dot"></span> Loadouts</a>
+        <a class="nav-item" href="#"><span class="dot"></span> Tools</a>
+      </div>
+      <div class="nav-right"><a class="signin" href="#">Sign in</a></div>
+    </nav>
+    <div id="map"></div>
+    <div class="map-hud">
+      <div class="hud-label">
+        <div class="hud-title" id="hudMapName">ZERO DAM</div>
+        <div class="hud-sub">INTERACTIVE MAP</div>
+      </div>
+      <div class="hud-zoom" aria-label="Zoom controls">
+        <button id="btnZoomIn" type="button" title="Zoom in">+</button>
+        <button id="btnZoomOut" type="button" title="Zoom out">-</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- RIGHT DETAILS PANEL -->
+  <aside id="infoPanel" class="rpanel" aria-label="Marker details" style="display:none">
+    <div class="r-head">
+      <div class="r-title" id="iTitle">Details</div>
+      <button id="iClose" class="r-close" aria-label="Close">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+          <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2" fill="none"/>
+        </svg>
+      </button>
+    </div>
+    <div class="r-body">
+      <div class="r-card" id="iMediaCard" style="display:none">
+        <div class="media-frame" id="iMedia"></div>
+      </div>
+      <div class="r-card" id="iBody" style="line-height:1.55;color:#d7e1ea">Select a marker to view information.</div>
+    </div>
+  </aside>
+</div>
+
+<div class="updated" id="updatedBadge">LAST UPDATED: AUGUST 20, 2025 21:32 AM</div>
+
+<script>
+  /* MAP + UI CONFIG */
+  const MAPS = { "zero-dam": { name:"ZERO DAM", src:"./map.png", w:null, h:null } };
+
+  /* Per-category icon assets */
+  const ITEM_ICON_MAP = {
+    spawn_locations: { type:'img', src:'./icons/spawns_extracts/spawn_locations.png' },
+    random_extracts: { type:'img', src:'./icons/spawns_extracts/random_extractions.png' },
+    conditional_extracts: { type:'img', src:'./icons/spawns_extracts/conditional_extractions.png' },
+    normal_extracts: { type:'img', src:'./icons/spawns_extracts/normal_extractions.png' },
+    paid_extracts: { type:'img', src:'./icons/spawns_extracts/paid_extractions.png' },
+    map_event_extraction: { type:'img', src:'./icons/spawns_extracts/map_event_extractions.png' },
+    safe: { type:'img', src:'./icons/general/safe.png' },
+    wired_fence: { type:'img', src:'./icons/general/wired_fence.png' },
+    ammo_crate: { type:'img', src:'./icons/general/ammo_crates.png' },
+    poi_labels: { type:'img', src:'./icons/poi/poi.svg' },
+    hidden_stash: { type:'img', src:'./icons/items/hidden_stash.png' },
+    keycard_silver: { type:'img', src:'./icons/items/keycard_silver.png' },
+    keycard_gold: { type:'img', src:'./icons/items/keycard_gold.png' },
+    secret_protocol_crate_d1: { type:'img', src:'./icons/easter_eggs/secret_protocol_crate.png' },
+    secret_protocol_crate_d8: { type:'img', src:'./icons/easter_eggs/secret_protocol_crate.png' },
+    secret_protocol_crate_d6: { type:'img', src:'./icons/easter_eggs/secret_protocol_crate.png' },
+    secret_protocol_crate_d7: { type:'img', src:'./icons/easter_eggs/secret_protocol_crate.png' },
+    boss: { type:'img', src:'./icons/enemies/boss.png' },
+    flamethrower: { type:'img', src:'./icons/enemies/flamethrower.png' },
+    heavy_mg: { type:'img', src:'./icons/enemies/heavy_machine_gunner.png' },
+    rocketeer: { type:'img', src:'./icons/enemies/rocketeer.png' },
+    shieldbearer: { type:'img', src:'./icons/enemies/shieldbearer.png' }
+  };
+
+  /* Backend-only ring colors */
+  const ITEM_RING_COLORS = {
+    boss:     '#ff5a5a', // red
+    // add more categories if needed
+  };
+
+  function iconHTML(itemId,{forMarker=false}={}){
+    const cfg = ITEM_ICON_MAP[itemId] || {type:'dot', color:'grey'};
+    if (cfg.type === 'img' && cfg.src){
+      const size = forMarker ? 25 : 20;
+      return `<img src="${cfg.src}" alt="" style="width:${size}px;height:${size}px;display:block">`;
+    }
+    const tone = (cfg.color === 'yellow') ? 'yellow' : 'grey';
+    return `<span class="ic ${tone}"></span>`;
+  }
+
+  const GROUPS = [
+    { id:"spawns_extracts", title:"SPAWNS & EXTRACTS", items:[
+      {id:"spawn_locations", name:"Spawn Locations"},
+      {id:"random_extracts", name:"Random Extracts"},
+      {id:"conditional_extracts", name:"Conditional Extracts"},
+      {id:"normal_extracts", name:"Normal Extracts"},
+      {id:"paid_extracts", name:"Paid Extracts"},
+      {id:"map_event_extraction", name:"Map Event Extraction"},
+    ]},
+    { id:"general", title:"GENERAL", items:[
+      {id:"safe", name:"Safe"},
+      {id:"wired_fence", name:"Wired Fence"},
+      {id:"ammo_crate", name:"Ammo Crate"},
+    ]},
+    { id:"poi", title:"POI", items:[ {id:"poi_labels", name:"POI labels"} ] },
+    { id:"items", title:"ITEMS", items:[ 
+	  {id:"hidden_stash", name:"Hidden Stash"},
+	  {id:"keycard_silver", name:"Silver Keycards"},
+	  {id:"keycard_gold", name:"Gold Keycards"}] },
+    { id:"easter_eggs", title:"EASTER EGGS", items:[
+      {id:"secret_protocol_crate_d1", name:"Secret Protocol Crate D1"},
+      {id:"secret_protocol_crate_d8", name:"Secret Protocol Crate D8"},
+      {id:"secret_protocol_crate_d6", name:"Secret Protocol Crate D6"},
+      {id:"secret_protocol_crate_d7", name:"Secret Protocol Crate D7"},
+    ]},
+    { id:"enemies", title:"ENEMIES", items:[
+      {id:"boss", name:"Boss"},
+      {id:"flamethrower", name:"Flame Thrower"},
+      {id:"heavy_mg", name:"Heavy Machine Gunner"},
+      {id:"rocketeer", name:"Rocketeer"},
+      {id:"shieldbearer", name:"Shieldbearer"},
+    ]}
+  ];
+
+  const POIS_BY_MAP = {
+    "zero-dam": {
+      spawn_locations: [
+        { id:"spawn1", title:"Spawn Location", x:527,  y:1757 },
+        { id:"spawn2", title:"Spawn Location", x:957,  y:1847 },
+        { id:"spawn3", title:"Spawn Location", x:458,  y:1599 },
+        { id:"spawn4", title:"Spawn Location", x:947,  y:1666 },
+        { id:"spawn5", title:"Spawn Location", x:446,  y:1156 },
+        { id:"spawn6", title:"Spawn Location", x:707,  y:1359 },
+		{ id:"spawn7", title:"Spawn Location", x:1813,  y:1271 },
+		{ id:"spawn8", title:"Spawn Location", x:2006,  y:1348 },
+		{ id:"spawn9", title:"Spawn Location", x:2175,  y:914},
+		{ id:"spawn10", title:"Spawn Location", x:1814,  y:900},
+		{ id:"spawn12", title:"Spawn Location", x:1501,  y:1405},
+		{ id:"spawn13", title:"Spawn Location", x:1531,  y:793},
+		{ id:"spawn14", title:"Spawn Location", x:860,  y:1093},
+		{ id:"spawn15", title:"Spawn Location", x:1959,  y:434},
+      ],
+      boss: [ 
+		{ id:"boss_1", title:"Captain Saeed", x:1498, y:1632, radius:140 } 
+	  ],
+      keycard_silver: [ 
+		{ id:"silver_keycard_1", title:"Silver Keycard", x:842, y:1803 },
+		{ id:"silver_keycard_2", title:"Silver Keycard", x:703, y:1345 },
+		{ id:"silver_keycard_3", title:"Silver Keycard", x:656, y:1182 },
+		{ id:"silver_keycard_4", title:"Silver Keycard", x:860, y:1257 },
+		{ id:"silver_keycard_5", title:"Silver Keycard", x:1101, y:1443 },
+		{ id:"silver_keycard_6", title:"Silver Keycard", x:1482, y:1249 },
+		{ id:"silver_keycard_7", title:"Silver Keycard", x:1531, y:1119 },
+		{ id:"silver_keycard_8", title:"Silver Keycard", x:1383, y:984 },
+		{ id:"silver_keycard_9", title:"Silver Keycard", x:1909, y:1179 },
+		{ id:"silver_keycard_10", title:"Silver Keycard", x:2047, y:841 },
+		{ id:"silver_keycard_11", title:"Silver Keycard", x:2012, y:743 }
+	  ],
+      safe: [ 
+		{ id:"safe_1", title:"Captain Saeed", x:837, y:1815 },
+		{ id:"safe_2", title:"Captain Saeed", x:795, y:1789 },
+		{ id:"safe_3", title:"Captain Saeed", x:872, y:1754 },
+		{ id:"safe_4", title:"Captain Saeed", x:822, y:1420 },
+		{ id:"safe_5", title:"Captain Saeed", x:794, y:1367 },
+		{ id:"safe_6", title:"Captain Saeed", x:1518, y:1138 },
+		{ id:"safe_7", title:"Captain Saeed", x:1557, y:1111 },
+		{ id:"safe_8", title:"Captain Saeed", x:2029, y:836 },
+		{ id:"safe_9", title:"Captain Saeed", x:1972, y:751 }
+	  ],
+      wired_fence: [ 
+		{ id:"fence_1", title:"Wired Fence", x:703, y:1698 },
+		{ id:"fence_2", title:"Wired Fence", x:1400, y:1766 },
+		{ id:"fence_3", title:"Wired Fence", x:1592, y:1157 },
+		{ id:"fence_4", title:"Wired Fence", x:1561, y:1095 }
+	  ],
+      ammo_crate: [ 
+		{ id:"ammo_crate_1", title:"Wired Fence", x:824, y:1713 },
+		{ id:"ammo_crate_2", title:"Wired Fence", x:915, y:1720 },
+		{ id:"ammo_crate_3", title:"Wired Fence", x:972, y:1841 },
+		{ id:"ammo_crate_4", title:"Wired Fence", x:1564, y:1706 },
+		{ id:"ammo_crate_5", title:"Wired Fence", x:1708, y:1524 },
+		{ id:"ammo_crate_6", title:"Wired Fence", x:537, y:1250 },
+		{ id:"ammo_crate_7", title:"Wired Fence", x:1514, y:1160 },
+		{ id:"ammo_crate_8", title:"Wired Fence", x:1831, y:1132 },
+		{ id:"ammo_crate_9", title:"Wired Fence", x:1954, y:998 },
+		{ id:"ammo_crate_10", title:"Wired Fence", x:1600, y:862 }
+	  ],
+      random_extracts: [ 
+		{ id:"random_extract_1", title:"Highway Shortcut Extraction", x:645, y:1149 },
+		{ id:"random_extract_2", title:"Random Extract", x:1924, y:416 }
+  	  ],
+      conditional_extracts: [ 
+		{ id:"conditional_extract_1", title:"No Backpack Extraction", x:689, y:1907 },
+		{ id:"conditional_extract_2", title:"Weight Limit Extraction", x:2155, y:1558 }
+  	  ],
+      secret_protocol_crate_d1: [ 
+		{ id:"secret_protocol_crate_d1", title:"Secret Protocol Crate D1", x:1769, y:1757 },
+  	  ],
+      secret_protocol_crate_d8: [ 
+		{ id:"secret_protocol_crate_d8", title:"Secret Protocol Crate D8", x:1522, y:1663 },
+  	  ],
+      secret_protocol_crate_d6: [ 
+		{ id:"secret_protocol_crate_d6", title:"Secret Protocol Crate D6", x:605, y:1857 },
+  	  ],
+      secret_protocol_crate_d7: [ 
+		{ id:"secret_protocol_crate_d7", title:"Secret Protocol Crate D7", x:1049, y:1276 },
+  	  ],
+      normal_extracts: [ 
+		{ id:"normal_extract_1", title:"Western Highway Extraction", x:472, y:1133 },
+		{ id:"normal_extract_2", title:"Normal Extract", x:2206, y:940 }
+  	  ],
+      paid_extracts: [ 
+		{ id:"paid_extract_1", title:"Paid Extract", x:1188, y:961 }
+  	  ],
+      map_event_extraction: [ 
+		{ id:"map_evemt_extract_1", title:"Industrial Elevator Extraction", x:1692, y:1870 }
+  	  ]
+    }
+  };
+
+  const INFO = {
+    spawn1: { title:"Spawn Location", body:`<p>The player's spawning location.</p>` },
+    spawn2: { title:"Spawn Location", body:`<p>The player's spawning location.</p>` },
+	spawn3: { title:"Spawn Location", body:`<p>The player's spawning location.</p>` },
+	spawn4: { title:"Spawn Location", body:`<p>The player's spawning location.</p>` },
+	spawn5: { title:"Spawn Location", body:`<p>The player's spawning location.</p>` },
+	spawn6: { title:"Spawn Location", body:`<p>The player's spawning location.</p>` },
+	spawn7: { title:"Spawn Location", body:`<p>The player's spawning location.</p>` },
+	spawn8: { title:"Spawn Location", body:`<p>The player's spawning location.</p>` },
+	spawn9: { title:"Spawn Location", body:`<p>The player's spawning location.</p>` },
+	spawn10: { title:"Spawn Location", body:`<p>The player's spawning location.</p>` },
+	spawn11: { title:"Spawn Location", body:`<p>The player's spawning location.</p>` },
+	spawn12: { title:"Spawn Location", body:`<p>The player's spawning location.</p>` },
+	spawn13: { title:"Spawn Location", body:`<p>The player's spawning location.</p>` },
+	spawn14: { title:"Spawn Location", body:`<p>The player's spawning location.</p>` },
+	spawn15: { title:"Spawn Location", body:`<p>The player's spawning location.</p>` },
+	boss_1: { title:"Saeed ziaten AKA Captain Saeed", body:`<p>Saeed has a chance to spawn in the Administrative Area. When he spots nearby players, he quickly engages and closes the distance. Equipped with Level 4 body armor, he is highly resistant to low-tier ammunition, making it crucial to coordinate with your team and use high-tier ammunition. You have the opportunity to obtain a Saeed Certification Crate, which contains a weapon skin for the M249. This crate (and gun itself) can be found in his backpack.</p>` },
+  };
+
+  /* STATE + MAP */
+  const state = {
+    mapKey:"zero-dam",
+    active:new Set(), groups:{}, markers:[],
+    iconOpacity:1, debug:false,
+    showRings:true,          // <<< default ON
+    rings:{}
+  };
+  const map = L.map("map", { crs:L.CRS.Simple, zoomSnap:0.15, zoomDelta:1.5, minZoom:-2, attributionControl:false, zoomControl:false });
+  let overlay, bounds;
+
+  document.getElementById("btnZoomIn").addEventListener("click", () => map.zoomIn());
+  document.getElementById("btnZoomOut").addEventListener("click", () => map.zoomOut());
+
+  function toast(msg){ const el=document.getElementById("updatedBadge"); if(!el) return; el.textContent=msg; el.style.background="rgba(64,18,18,.96)"; el.style.borderColor="#6b2323"; }
+  function keepViewStable(fn){ const c=map.getCenter(), z=map.getZoom(); fn(); map.invalidateSize(); map.setView(c,z,{animate:false}); }
+  function ensureMapVisible(){ map.invalidateSize(); if(bounds) map.fitBounds(bounds,{animate:true}); }
+
+  function loadMap(key){
+    state.mapKey = key;
+    const m = MAPS[key];
+    const probe = new Image();
+    probe.onload = () => {
+      const W = m.w || probe.naturalWidth, H = m.h || probe.naturalHeight;
+      bounds = L.latLngBounds([[0,0],[H,W]]);
+      if (overlay) map.removeLayer(overlay);
+      overlay = L.imageOverlay(m.src, bounds).addTo(map);
+      map.fitBounds(bounds);
+      overlay.once('load', ensureMapVisible);
+      const hud=document.getElementById("hudMapName"); if(hud) hud.textContent=m.name;
+      const badge=document.getElementById("updatedBadge"); if(badge){ badge.style.background="rgba(16,19,23,.96)"; badge.style.borderColor="var(--border)"; }
+    };
+    probe.onerror = () => { toast(`Map image not found: ${m.src}`); console.error("Failed to load map image:", m.src); };
+    probe.src = m.src;
+  }
+
+  /* Side accordions */
+  const mapSelect=document.getElementById("mapSelect");
+  for(const [k,v] of Object.entries(MAPS)){ const opt=document.createElement("option"); opt.value=k; opt.textContent=v.name; mapSelect.appendChild(opt); }
+  mapSelect.value=state.mapKey;
+  mapSelect.addEventListener("change",e=>{ loadMap(e.target.value); renderAll(); refreshScrollbar(); ensureMapVisible(); clearAllRings(); });
+
+  const accHost=document.getElementById("accHost");
+  function buildAccordions(){
+    accHost.innerHTML=""; state.active=new Set(); state.groups={};
+    const available=POIS_BY_MAP[state.mapKey]||{};
+    GROUPS.forEach((g,idx)=>{
+      const acc=document.createElement("div"); acc.className=idx===0?"acc open":"acc";
+      const head=document.createElement("div"); head.className="acc-h";
+      head.innerHTML=`<div class="acc-title">${g.title}</div><div class="chev">›</div>`;
+      head.addEventListener("click",e=>{ if(e.target.closest(".acc-h")&&!e.target.closest(".item")){ acc.classList.toggle("open"); refreshScrollbar(); keepViewStable(()=>{}); }});
+      const body=document.createElement("div"); body.className="acc-b";
+      g.items.forEach(item=>{
+        state.groups[item.id]=L.layerGroup().addTo(map);
+        const row=document.createElement("div"); row.className="item";
+        row.innerHTML=`<div class="status-dot">${iconHTML(item.id)}</div><div class="name">${item.name}</div><div class="switch"><div class="knob"></div></div>`;
+        const sw=row.querySelector(".switch");
+        const hasData=Array.isArray(available[item.id])&&available[item.id].length>0;
+        if(hasData){ sw.classList.add("on"); row.classList.add("on"); state.active.add(item.id); }
+        sw.addEventListener("click",(ev)=>{ ev.stopPropagation(); const on=!sw.classList.contains("on"); sw.classList.toggle("on",on); row.classList.toggle("on",on); if(on) state.active.add(item.id); else state.active.delete(item.id); applyFilters(); });
+        body.appendChild(row);
+      });
+      acc.appendChild(head); acc.appendChild(body); accHost.appendChild(acc);
+    });
+  }
+
+  // ALL / NONE
+  document.getElementById("btnAll").addEventListener("click",()=>{ state.active=new Set(GROUPS.flatMap(g=>g.items.map(i=>i.id))); document.querySelectorAll(".item").forEach(r=>r.classList.add("on")); document.querySelectorAll(".switch").forEach(s=>s.classList.add("on")); applyFilters(); });
+  document.getElementById("btnNone").addEventListener("click",()=>{ state.active.clear(); document.querySelectorAll(".item").forEach(r=>r.classList.remove("on")); document.querySelectorAll(".switch").forEach(s=>s.classList.remove("on")); applyFilters(); });
+
+  const search=document.getElementById("search");
+  search.addEventListener("input",applyFilters);
+
+  document.querySelector("#settingsAcc .acc-h").addEventListener("click",()=>{ document.getElementById("settingsAcc").classList.toggle("open"); refreshScrollbar(); keepViewStable(()=>{}); });
+
+  const opacityInput=document.getElementById("iconOpacity"); const opacityVal=document.getElementById("opacityVal");
+  opacityInput.addEventListener("input",()=>{ state.iconOpacity=parseFloat(opacityInput.value); opacityVal.textContent=Math.round(state.iconOpacity*100)+"%"; state.markers.forEach(({marker})=>marker.setOpacity(state.iconOpacity)); });
+
+  const debugSwitch=document.getElementById("debugSwitch"); const debugReadout=document.getElementById("debugReadout");
+  document.getElementById("rowDebug").addEventListener("click",(e)=>{ e.stopPropagation(); state.debug=!state.debug; debugSwitch.classList.toggle("on",state.debug); debugReadout.style.display=state.debug?"block":"none"; refreshScrollbar(); });
+  map.on("click",e=>{ if(!state.debug) return; const y=Math.round(e.latlng.lat), x=Math.round(e.latlng.lng); debugReadout.textContent=`Pixel X: ${x}   Y: ${y}`; });
+
+  function markerIcon(itemId){
+    return L.divIcon({ className:"", html:`<div class="status-dot">${iconHTML(itemId,{forMarker:true})}</div>`, iconSize:[20,20], iconAnchor:[10,10] });
+  }
+
+  function renderMarkers(){
+    Object.values(state.groups).forEach(g=>g.clearLayers());
+    state.markers.length=0;
+    const data=POIS_BY_MAP[state.mapKey]||{};
+    for(const [itemId,points] of Object.entries(data)){
+      if(!state.groups[itemId]) continue;
+      for(const p of points){
+        const m=L.marker([p.y,p.x],{icon:markerIcon(itemId),opacity:state.iconOpacity});
+        m.bindTooltip(p.title||itemId,{direction:"right",offset:[12,0],opacity:.95});
+        m.on('click',()=>openInfo(p,itemId));
+        m.addTo(state.groups[itemId]);
+        state.markers.push({marker:m,data:{...p,itemId}});
+      }
+    }
+    applyFilters();
+    renderRings();
+    syncRingVisibility();
+  }
+
+  function applyFilters(){
+    const q=search.value.trim().toLowerCase();
+    state.markers.forEach(({marker,data})=>{
+      const inItem=state.active.has(data.itemId);
+      const match=!q||(data.title||"").toLowerCase().includes(q);
+      const show=inItem&&match;
+      if(show) marker.addTo(state.groups[data.itemId]); else state.groups[data.itemId].removeLayer(marker);
+    });
+    syncRingVisibility();
+  }
+
+  /* RIGHT DETAILS PANEL */
+  const appRoot=document.getElementById('appRoot'); const infoPanel=document.getElementById('infoPanel');
+  const iTitle=document.getElementById('iTitle'); const iBody=document.getElementById('iBody'); const iMedia=document.getElementById('iMedia'); const iMediaCard=document.getElementById('iMediaCard');
+  document.getElementById('iClose').addEventListener('click', closeInfo);
+
+  function closeInfo(){ keepViewStable(()=>{ infoPanel.style.display='none'; appRoot.classList.remove('has-info'); }); iMedia.innerHTML=''; iMediaCard.style.display='none'; iTitle.textContent='Details'; iBody.innerHTML='Select a marker to view information.'; }
+  function openInfo(point,itemId){
+    const data=INFO[point.id]||ITEM_INFO[itemId];
+    if(!data||(!data.title&&!data.body&&!data.media)) return;
+    iTitle.textContent=data.title||(point.title||'Details'); iBody.innerHTML=data.body||'<p></p>';
+    iMedia.innerHTML=''; iMediaCard.style.display='none';
+    if(data.media){
+      switch(data.media.type){
+        case 'img': if(data.media.src){ const img=new Image(); img.alt=data.title||''; img.onload=()=>{ iMedia.innerHTML=''; iMedia.appendChild(img); iMediaCard.style.display='block'; }; img.onerror=()=>{ iMediaCard.style.display='none'; iMedia.innerHTML=''; }; img.src=data.media.src; } break;
+        case 'video': if(data.media.src){ const v=document.createElement('video'); v.src=data.media.src; v.controls=true; v.playsInline=true; iMedia.appendChild(v); iMediaCard.style.display='block'; } break;
+        case 'youtube': if(data.media.id){ iMedia.innerHTML=`<iframe allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen src="https://www.youtube.com/embed/${data.media.id}"></iframe>`; iMediaCard.style.display='block'; } break;
+      }
+    }
+    keepViewStable(()=>{ infoPanel.style.display='flex'; appRoot.classList.add('has-info'); });
+  }
+
+  /* RINGS — default ON */
+  function ringStyle(itemId, p){
+    const c = (p && p.ringColor) || ITEM_RING_COLORS[itemId] || '#ff5a5a';
+    return { color:c, weight:2, dashArray:'8 8', fill:true, fillOpacity:0.22, fillColor:c, interactive:false };
+  }
+  function ensureRingGroup(itemId){ if(!state.rings[itemId]) state.rings[itemId]=L.layerGroup().addTo(map); return state.rings[itemId]; }
+  function clearAllRings(){ Object.values(state.rings).forEach(g=>g.clearLayers()); }
+  function renderRings(){
+    clearAllRings(); if(!state.showRings) return;
+    const data=POIS_BY_MAP[state.mapKey]||{};
+    for(const [itemId,points] of Object.entries(data)){
+      const grp=ensureRingGroup(itemId); if(!Array.isArray(points)) continue;
+      points.forEach(p=>{ if(!p.radius) return; L.circle([p.y,p.x],{ radius:p.radius, ...ringStyle(itemId,p) }).addTo(grp); });
+    }
+  }
+  function syncRingVisibility(){
+    if(!state.showRings){ clearAllRings(); return; }
+    renderRings();
+    for(const [itemId,grp] of Object.entries(state.rings)){ const on=state.active.has(itemId); if(on) grp.addTo(map); else map.removeLayer(grp); }
+  }
+
+  const rowRings=document.getElementById('rowRings'); const ringsSwitch=document.getElementById('ringsSwitch');
+  if(rowRings&&ringsSwitch){
+    // reflect default ON state in the UI
+    ringsSwitch.classList.toggle('on', state.showRings);
+    rowRings.addEventListener('click',(e)=>{ e.stopPropagation(); state.showRings=!state.showRings; ringsSwitch.classList.toggle('on',state.showRings); if(state.showRings) renderRings(); else clearAllRings(); syncRingVisibility(); });
+  }
+
+  /* custom sidebar scrollbar */
+  const panelBody=document.querySelector('.panel-body'); const bar=document.querySelector('.panel-scrollbar'); const thumb=document.querySelector('.panel-thumb');
+  function refreshScrollbar(){ const sh=panelBody.scrollHeight, ch=panelBody.clientHeight, trackH=bar.clientHeight; if(sh<=ch){ bar.style.display='none'; return; } bar.style.display='block'; const ratio=ch/sh, thumbH=Math.max(30,Math.floor(trackH*ratio)); const maxScroll=sh-ch, maxTrack=trackH-thumbH; thumb.style.height=thumbH+'px'; const top=(panelBody.scrollTop/maxScroll)*maxTrack; thumb.style.transform=`translateY(${isFinite(top)?top:0}px)`; }
+  panelBody.addEventListener('scroll',refreshScrollbar);
+  window.addEventListener('resize',()=>{ refreshScrollbar(); keepViewStable(()=>{}); });
+  new ResizeObserver(()=>{ refreshScrollbar(); keepViewStable(()=>{}); }).observe(panelBody);
+  let dragging=false,startY=0,startScroll=0;
+  thumb.addEventListener('mousedown',e=>{ dragging=true; startY=e.clientY; startScroll=panelBody.scrollTop; bar.classList.add('active'); e.preventDefault(); });
+  window.addEventListener('mousemove',e=>{ if(!dragging) return; const trackH=bar.clientHeight, th=thumb.offsetHeight; const maxTrack=trackH-th, maxScroll=panelBody.scrollHeight-panelBody.clientHeight; const dy=e.clientY-startY; panelBody.scrollTop=startScroll+(dy/maxTrack)*maxScroll; });
+  window.addEventListener('mouseup',()=>{ dragging=false; bar.classList.remove('active'); });
+  bar.addEventListener('mousedown',e=>{ if(e.target===thumb) return; const rect=bar.getBoundingClientRect(); const y=e.clientY-rect.top; const pct=y/bar.clientHeight; panelBody.scrollTop=pct*(panelBody.scrollHeight-panelBody.clientHeight); });
+
+  function renderAll(){ buildAccordions(); renderMarkers(); refreshScrollbar(); }
+  loadMap(state.mapKey);
+  renderAll();
+  // showRings is true by default, rings already rendered via renderMarkers->renderRings
+  ensureMapVisible();
+  window.addEventListener("load", () => { keepViewStable(()=>{}); });
+</script>
+</body>
+</html>
